@@ -170,6 +170,7 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--cyan)}
     <h3>Voz</h3>
     <label for="ttsProvider">Motor de voz</label>
     <select id="ttsProvider">
+      <option value="online">Voz online pt-PT (grátis, recomendada no iPhone)</option>
       <option value="browser">Voz do dispositivo (grátis)</option>
       <option value="openai">OpenAI TTS (mais natural)</option>
       <option value="elevenlabs">ElevenLabs (mais natural)</option>
@@ -218,7 +219,7 @@ const $ = s => document.querySelector(s);
 /* ================= Definições ================= */
 const DEFAULTS = {
   apiKey: '', baseUrl: 'https://api.groq.com/openai/v1', model: 'openai/gpt-oss-120b', city: 'Porto',
-  autoListen: true, ttsProvider: 'browser', voiceURI: '', rate: 1.05,
+  autoListen: true, ttsProvider: 'online', voiceURI: '', rate: 1.05,
   openaiKey: '', openaiVoice: 'onyx', elevenKey: '', elevenVoice: ''
 };
 let S = load();
@@ -229,6 +230,7 @@ function migrate(){
   if (isGroqKey && !/groq\.com/.test(S.baseUrl||'')) { S.baseUrl = DEFAULTS.baseUrl; if (/^grok/i.test(S.model||'')) S.model = DEFAULTS.model; save(); }
   else if (oldX && !(S.apiKey||'').trim().startsWith('xai-')) { S.baseUrl = DEFAULTS.baseUrl; S.model = DEFAULTS.model; save(); }
 }
+S.ttsProvider === 'browser' && !localStorage.getItem('jarvis.v5') && (S.ttsProvider = 'online', localStorage.setItem('jarvis.v5','1'), save());
 migrate();
 function load(){ try{ return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('jarvis.settings')||'{}')); }catch(e){ return {...DEFAULTS}; } }
 function save(){ localStorage.setItem('jarvis.settings', JSON.stringify(S)); }
@@ -380,6 +382,7 @@ async function speak(text, opts){
   if (!text) return;
   setState('speaking');
   try{
+    if (S.ttsProvider === 'online') return await speakOnline(text, opts);
     if (S.ttsProvider === 'openai' && S.openaiKey) return await speakRemote(openaiTTS(text));
     if (S.ttsProvider === 'elevenlabs' && S.elevenKey && S.elevenVoice) return await speakRemote(elevenTTS(text));
   }catch(e){
@@ -456,11 +459,49 @@ async function speakRemote(blobP){
     audioEl.play().catch(err => { console.warn(err); end(); });
   });
 }
+// Voz online gratuita: toca o áudio em pedaços curtos num elemento de áudio (funciona no iPhone mesmo com o Safari calado)
+function chunkText(t, max){
+  const out = []; let cur = '';
+  for (const w of t.split(' ')){
+    if ((cur + ' ' + w).trim().length > max){ if (cur) out.push(cur.trim()); cur = w; }
+    else cur += ' ' + w;
+    if (/[.!?;]$/.test(w) && cur.length > max * 0.5){ out.push(cur.trim()); cur = ''; }
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+function speakOnline(text, opts){
+  opts = opts || {};
+  const parts = chunkText(text, 180);
+  const rate = Number(S.rate) || 1;
+  return new Promise(resolve => {
+    let i = 0, done = false;
+    const finish = (err) => {
+      if (done) return; done = true;
+      audioEl.onended = audioEl.onerror = audioEl.onpause = null; currentAudio = null;
+      if (err) { addMsg('sys', 'A voz online falhou (' + err + '). A usar a voz do dispositivo.'); speakBrowser(text, opts).then(resolve); }
+      else resolve();
+    };
+    const next = () => {
+      if ((state !== 'speaking' && !opts.test) || i >= parts.length) { finish(); return; }
+      const q = encodeURIComponent(parts[i++]);
+      currentAudio = audioEl;
+      audioEl.onended = next;
+      audioEl.onerror = () => finish('sem ligação');
+      audioEl.onpause = () => { if (!audioEl.ended) finish(); };
+      audioEl.src = `https://translate.google.com/translate_tts?ie=UTF-8&tl=pt-PT&client=tw-ob&ttsspeed=1&q=${q}`;
+      audioEl.playbackRate = rate;
+      const p = audioEl.play();
+      if (p) p.catch(err => finish(err && err.name === 'NotAllowedError' ? 'o iPhone bloqueou o som, toca outra vez no reator' : (err && err.message) || 'erro'));
+    };
+    next();
+  });
+}
 let unlocked = false;
 function unlockAudio(){
   // Desbloqueia a voz em cada toque (o iOS só deixa falar depois de um gesto)
-  if (!unlocked){ unlocked = true; try{ audioEl.src = SILENT; const p = audioEl.play(); if (p) p.then(()=>audioEl.pause()).catch(()=>{}); }catch(e){} }
-  try{ if (synth && !synth.speaking){ synth.resume(); const u = new SpeechSynthesisUtterance(' '); u.lang = 'pt-PT'; synth.speak(u); } }catch(e){}
+  if (!unlocked){ unlocked = true; try{ audioEl.src = SILENT; const p = audioEl.play(); if (p) p.then(()=>{ if (audioEl.src === SILENT) audioEl.pause(); }).catch(()=>{}); }catch(e){} }
+  try{ if (synth && S.ttsProvider === 'browser' && !synth.speaking){ synth.resume(); const u = new SpeechSynthesisUtterance(' '); u.lang = 'pt-PT'; synth.speak(u); } }catch(e){}
 }
 
 /* ================= Voz (entrada) ================= */
@@ -598,7 +639,7 @@ $('#testVoice').addEventListener('click', async () => {
   const prev = {...S}; readPanel();
   if (synth && !voices.length) voices = synth.getVoices();
   const v = pickVoice();
-  addMsg('sys', synth ? `Teste de voz: ${voices.length} vozes no dispositivo; a usar ${v ? v.name + ' (' + v.lang + ')' : 'a voz padrão pt-PT'}.` : 'Este navegador não tem síntese de voz.');
+  if (S.ttsProvider === 'online') addMsg('sys', 'Teste de voz: a usar a voz online pt-PT.'); else addMsg('sys', synth ? `Teste de voz: ${voices.length} vozes no dispositivo; a usar ${v ? v.name + ' (' + v.lang + ')' : 'a voz padrão pt-PT'}.` : 'Este navegador não tem síntese de voz.');
   const was = state; setState('speaking');
   await speak('Às suas ordens, Martim. Todos os sistemas estão operacionais.', {now:true, test:true, report:true});
   if (state === 'speaking') setState(was === 'speaking' ? 'idle' : was);
