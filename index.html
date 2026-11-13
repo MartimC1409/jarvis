@@ -222,6 +222,14 @@ const DEFAULTS = {
   openaiKey: '', openaiVoice: 'onyx', elevenKey: '', elevenVoice: ''
 };
 let S = load();
+/* Migração: definições antigas da xAI ou chave do Groq com endereço errado */
+function migrate(){
+  const isGroqKey = (S.apiKey||'').trim().startsWith('gsk_');
+  const oldX = /api\.x\.ai/.test(S.baseUrl||'');
+  if (isGroqKey && !/groq\.com/.test(S.baseUrl||'')) { S.baseUrl = DEFAULTS.baseUrl; if (/^grok/i.test(S.model||'')) S.model = DEFAULTS.model; save(); }
+  else if (oldX && !(S.apiKey||'').trim().startsWith('xai-')) { S.baseUrl = DEFAULTS.baseUrl; S.model = DEFAULTS.model; save(); }
+}
+migrate();
 function load(){ try{ return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('jarvis.settings')||'{}')); }catch(e){ return {...DEFAULTS}; } }
 function save(){ localStorage.setItem('jarvis.settings', JSON.stringify(S)); }
 
@@ -569,7 +577,7 @@ $('#gearBtn').addEventListener('click', openSettings);
 $('#ttsProvider').addEventListener('change', syncPanel);
 $('#rate').addEventListener('input', syncPanel);
 $('#saveSet').addEventListener('click', () => {
-  const oldCity = S.city; readPanel(); save();
+  const oldCity = S.city; readPanel(); save(); migrate();
   if (S.city !== oldCity) { weatherInfo = ''; loadWeather(); }
   $('#settings').classList.remove('open');
   addMsg('sys', 'Definições guardadas.');
