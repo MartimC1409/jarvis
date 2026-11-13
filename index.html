@@ -375,7 +375,7 @@ if (synth){ refreshVoices(); synth.onvoiceschanged = refreshVoices; setTimeout(r
 
 function cleanForSpeech(t){ return t.replace(/[*_#`>~]/g,'').replace(/https?:\/\/\S+/g,'').replace(/\s+/g,' ').trim(); }
 
-async function speak(text){
+async function speak(text, opts){
   text = cleanForSpeech(text);
   if (!text) return;
   setState('speaking');
@@ -387,34 +387,40 @@ async function speak(text){
     console.warn('TTS remoto falhou, a usar voz do dispositivo', e);
     addMsg('sys', 'A voz online falhou (' + (e.message||e) + '). A usar a voz do dispositivo.');
   }
-  return speakBrowser(text);
+  return speakBrowser(text, opts);
 }
 
-function speakBrowser(text){
+let speakingReal = false;
+function speakBrowser(text, opts){
+  opts = opts || {};
   return new Promise(resolve => {
-    if (!synth){ resolve(); return; }
-    if (synth.speaking || synth.pending) synth.cancel();
+    if (!synth){ addMsg('sys','Este navegador não tem voz disponível.'); resolve(); return; }
+    // No iOS, cancel() seguido de speak() pode silenciar tudo: só cancela se houver fala real a decorrer
+    if (speakingReal && synth.speaking) synth.cancel();
     try{ synth.resume(); }catch(e){}
-    // Divide em frases: evita cortes do Chrome em textos longos
     const parts = text.match(/[^.!?;:]+[.!?;:]*\s*/g) || [text];
+    if (!voices.length) voices = synth.getVoices();
     const v = pickVoice();
-    let i = 0, done = false;
-    const finish = () => { if(!done){ done = true; clearInterval(keep); resolve(); } };
-    const keep = setInterval(() => { if (state !== 'speaking') { synth.cancel(); finish(); } }, 250);
+    let i = 0, done = false, lastErr = '', anyStarted = false;
+    speakingReal = true;
+    const finish = () => { if(!done){ done = true; speakingReal = false; clearInterval(keep); if (lastErr && opts.report) addMsg('sys','Erro da voz: ' + lastErr); resolve(); } };
+    const keep = setInterval(() => { if (state !== 'speaking' && !opts.test) { synth.cancel(); finish(); } }, 250);
     const next = () => {
-      if (state !== 'speaking' || i >= parts.length) { finish(); return; }
+      if ((state !== 'speaking' && !opts.test) || i >= parts.length) { finish(); return; }
       const u = new SpeechSynthesisUtterance(parts[i++].trim());
-      u.lang = v ? v.lang : 'pt-PT'; if (v) u.voice = v;
-      u.rate = Number(S.rate)||1; u.pitch = 1;
+      u.lang = v ? v.lang : 'pt-PT';
+      if (v && v.localService !== false) u.voice = v;
+      u.rate = Number(S.rate)||1; u.pitch = 1; u.volume = 1;
       let fired = false;
       const go = () => { if (fired) return; fired = true; clearTimeout(guard); next(); };
-      u.onend = go; u.onerror = go;
-      // Proteção: no iOS o onend às vezes não chega
+      let started = false; u.onstart = () => { started = true; anyStarted = true; };
+      u.onend = go; u.onerror = ev => { lastErr = (ev && ev.error) || 'desconhecido'; go(); };
+      if (opts.report && i === 1) setTimeout(() => { if (!started && !anyStarted && !lastErr) addMsg('sys', 'O Safari não começou a falar. Se abriste o Jarvis pelo ícone do ecrã principal, experimenta abrir o link diretamente no Safari.'); }, 2500);
       const guard = setTimeout(go, Math.max(4000, u.text.length * 120 / (u.rate||1)));
       synth.speak(u);
     };
-    // iOS precisa de um momento para libertar o microfone antes de falar
-    setTimeout(next, 350);
+    // Dentro de um toque fala logo (exigência do iOS); depois do microfone espera um instante
+    if (opts.now) next(); else setTimeout(next, 350);
   });
 }
 
@@ -454,7 +460,7 @@ let unlocked = false;
 function unlockAudio(){
   // Desbloqueia a voz em cada toque (o iOS só deixa falar depois de um gesto)
   if (!unlocked){ unlocked = true; try{ audioEl.src = SILENT; const p = audioEl.play(); if (p) p.then(()=>audioEl.pause()).catch(()=>{}); }catch(e){} }
-  try{ if (synth){ synth.resume(); const u = new SpeechSynthesisUtterance('.'); u.volume = 0.01; u.rate = 2; u.lang = 'pt-PT'; synth.speak(u); } }catch(e){}
+  try{ if (synth && !synth.speaking){ synth.resume(); const u = new SpeechSynthesisUtterance(' '); u.lang = 'pt-PT'; synth.speak(u); } }catch(e){}
 }
 
 /* ================= Voz (entrada) ================= */
@@ -589,10 +595,14 @@ $('#saveSet').addEventListener('click', () => {
   addMsg('sys', 'Definições guardadas.');
 });
 $('#testVoice').addEventListener('click', async () => {
-  unlockAudio(); const prev = {...S}; readPanel();
-  await speak('Às suas ordens, Martim. Todos os sistemas estão operacionais.');
-  if (state === 'speaking') setState('idle');
-  S = Object.assign(prev, {}); // só guarda ao carregar em Guardar
+  const prev = {...S}; readPanel();
+  if (synth && !voices.length) voices = synth.getVoices();
+  const v = pickVoice();
+  addMsg('sys', synth ? `Teste de voz: ${voices.length} vozes no dispositivo; a usar ${v ? v.name + ' (' + v.lang + ')' : 'a voz padrão pt-PT'}.` : 'Este navegador não tem síntese de voz.');
+  const was = state; setState('speaking');
+  await speak('Às suas ordens, Martim. Todos os sistemas estão operacionais.', {now:true, test:true, report:true});
+  if (state === 'speaking') setState(was === 'speaking' ? 'idle' : was);
+  S = Object.assign(prev, {});
 });
 $('#settings').addEventListener('click', e => { if (e.target.id === 'settings') $('#settings').classList.remove('open'); });
 
