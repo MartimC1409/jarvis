@@ -295,14 +295,14 @@ function systemPrompt(){
 Regras:
 - Responde SEMPRE em português europeu (de Portugal): vocabulário, ortografia e construções de Portugal, nunca do Brasil. Usa por exemplo "telemóvel", "ecrã", "autocarro", "pequeno-almoço", "casa de banho", "estás a fazer" (e não "você está fazendo", "celular", "tela", "ônibus", "café da manhã").
 - As tuas respostas vão ser lidas em voz alta: sê curto e natural para ouvir (normalmente 1 a 3 frases), sem markdown, listas, emojis, tabelas ou URLs. Escreve números e unidades de forma fácil de dizer.
-- Sê espirituoso, educado e ligeiramente britânico no humor, como o Jarvis. Trata-o por "Martim" e, de vez em quando, por "senhor".
+- Trata-o SEMPRE com extremo respeito e cortesia, como um mordomo de confiança: chama-o "senhor" (por exemplo "Com certeza, senhor.", "Às suas ordens, senhor."), usa sempre a terceira pessoa de cortesia ("o senhor", "deseja", "pretende") e nunca o tratas por "tu". Mantém um humor subtil e elegante, como o Jarvis, sem nunca faltar ao respeito.
 - Se não souberes algo ou não tiveres dados em tempo real, di-lo com honestidade e não inventes.
 Data e hora atuais (Lisboa): ${dt}.` + (weatherInfo ? `\nMeteorologia atual (Open-Meteo): ${weatherInfo}` : '');
 }
 
 async function ask(text){
   if (!S.apiKey){
-    const m = 'Martim, ainda não tenho cérebro ligado. Abra as definições, na roda dentada, e cole a sua chave grátis do Groq.';
+    const m = 'Peço desculpa, senhor, ainda não tenho cérebro ligado. Abra as definições, na roda dentada, e cole a sua chave grátis do Groq.';
     addMsg('sys', 'Falta a chave da API. Toque na roda dentada (⚙) e cole a sua chave grátis do Groq, que pode criar em console.groq.com.');
     session = false; await speak(m); setState('idle'); return;
   }
@@ -335,7 +335,7 @@ async function ask(text){
     if (/401|403|invalid.*key|incorrect.*key/i.test(msg)) msg += ' — verifique a chave da API nas definições.';
     else if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) msg = 'Sem ligação ao servidor da IA. Verifique a internet e o URL base nas definições.';
     addMsg('sys', msg);
-    await speak('Peço desculpa, Martim, houve um problema de ligação.');
+    await speak('Peço imensa desculpa, senhor. Houve um problema de ligação.');
   }
   afterTurn();
 }
@@ -648,7 +648,7 @@ $('#testVoice').addEventListener('click', async () => {
   const v = pickVoice();
   if (S.ttsProvider === 'online') addMsg('sys', 'Teste de voz: a usar a voz online pt-PT.'); else addMsg('sys', synth ? `Teste de voz: ${voices.length} vozes no dispositivo; a usar ${v ? v.name + ' (' + v.lang + ')' : 'a voz padrão pt-PT'}.` : 'Este navegador não tem síntese de voz.');
   const was = state; setState('speaking');
-  await speak('Às suas ordens, Martim. Todos os sistemas estão operacionais.', {now:true, test:true, report:true});
+  await speak('Às suas ordens, senhor. Todos os sistemas estão operacionais.', {now:true, test:true, report:true});
   if (state === 'speaking') setState(was === 'speaking' ? 'idle' : was);
   S = Object.assign(prev, {});
 });
