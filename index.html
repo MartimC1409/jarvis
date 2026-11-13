@@ -154,12 +154,12 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--cyan)}
     <h3>Cérebro (IA)</h3>
     <label for="apiKey">Chave da API</label>
     <input id="apiKey" type="password" placeholder="xai-…" autocomplete="off" autocapitalize="off" spellcheck="false">
-    <div class="hint">Crie uma chave em <a href="https://console.x.ai" target="_blank" rel="noopener">console.x.ai</a> (xAI / Grok). Também funciona com qualquer API compatível com OpenAI.</div>
+    <div class="hint">Crie uma chave grátis em <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a> (Groq, sem cartão). Também funciona com qualquer API compatível com OpenAI.</div>
     <label for="baseUrl">URL base</label>
     <input id="baseUrl" type="url" autocapitalize="off" spellcheck="false">
     <label for="model">Modelo</label>
     <input id="model" type="text" autocapitalize="off" spellcheck="false">
-    <div class="hint">Recomendado para voz (rápido): <b>grok-4.20-0309-non-reasoning</b>. Mais inteligente, mas mais lento: <b>grok-4.7</b>.</div>
+    <div class="hint">Recomendado (grátis no Groq): <b>openai/gpt-oss-120b</b>. Alternativa: <b>qwen/qwen3.8-27b</b>.</div>
     <label for="city">Cidade para a meteorologia</label>
     <input id="city" type="text" placeholder="Porto">
 
@@ -217,7 +217,7 @@ const $ = s => document.querySelector(s);
 
 /* ================= Definições ================= */
 const DEFAULTS = {
-  apiKey: '', baseUrl: 'https://api.x.ai/v1', model: 'grok-4.20-0309-non-reasoning', city: 'Porto',
+  apiKey: '', baseUrl: 'https://api.groq.com/openai/v1', model: 'openai/gpt-oss-120b', city: 'Porto',
   autoListen: true, ttsProvider: 'browser', voiceURI: '', rate: 1.05,
   openaiKey: '', openaiVoice: 'onyx', elevenKey: '', elevenVoice: ''
 };
@@ -291,8 +291,8 @@ Data e hora atuais (Lisboa): ${dt}.` + (weatherInfo ? `\nMeteorologia atual (Ope
 
 async function ask(text){
   if (!S.apiKey){
-    const m = 'Martim, ainda não tenho cérebro ligado. Abra as definições, na roda dentada, e cole a sua chave da API da xAI.';
-    addMsg('sys', 'Falta a chave da API. Toque na roda dentada (⚙) e cole a sua chave da xAI, que pode criar em console.x.ai.');
+    const m = 'Martim, ainda não tenho cérebro ligado. Abra as definições, na roda dentada, e cole a sua chave grátis do Groq.';
+    addMsg('sys', 'Falta a chave da API. Toque na roda dentada (⚙) e cole a sua chave grátis do Groq, que pode criar em console.groq.com.');
     session = false; await speak(m); setState('idle'); return;
   }
   history.push({role:'user', content:text});
@@ -588,7 +588,7 @@ if (!SR){
   addMsg('sys', 'Este navegador não suporta reconhecimento de voz. Pode escrever as perguntas na caixa abaixo — o Jarvis responde em voz. (Use o Safari no iPhone ou o Chrome para falar.)');
 }
 if (!S.apiKey){
-  addMsg('sys', 'Bem-vindo, Martim. Para começar, toque na roda dentada (⚙) e cole a sua chave da API da xAI (console.x.ai).');
+  addMsg('sys', 'Bem-vindo, Martim. Para começar, toque na roda dentada (⚙) e cole a sua chave grátis do Groq (console.groq.com).');
 }
 loadWeather();
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')){
