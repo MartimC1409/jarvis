@@ -171,6 +171,7 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--cyan)}
     <h3>Voz</h3>
     <label for="ttsProvider">Motor de voz</label>
     <select id="ttsProvider">
+      <option value="azure">Duarte, voz masculina de Portugal (Microsoft)</option>
       <option value="online">Voz online pt-PT (grátis, recomendada no iPhone)</option>
       <option value="browser">Voz do dispositivo (grátis)</option>
       <option value="openai">OpenAI TTS (mais natural)</option>
@@ -205,6 +206,14 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--cyan)}
       <div class="hint">Na Voice Library da ElevenLabs, procure uma voz com sotaque de Portugal e cole aqui o "Voice ID".</div>
     </div>
 
+    <div id="azureBox">
+      <label for="azureKey">Chave da Microsoft (Azure Speech)</label>
+      <input id="azureKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <label for="azureRegion">Região</label>
+      <input id="azureRegion" type="text" autocapitalize="off" spellcheck="false" placeholder="westeurope">
+      <div class="hint">No portal Azure, abra o recurso "Speech" → "Keys and Endpoint" e copie a KEY 1 e a "Location/Region" (por exemplo westeurope).</div>
+    </div>
+
     <div class="btns">
       <button class="sec" type="button" id="testVoice">Testar voz</button>
       <button type="button" id="saveSet">Guardar</button>
@@ -221,7 +230,7 @@ const $ = s => document.querySelector(s);
 const DEFAULTS = {
   apiKey: '', baseUrl: 'https://api.groq.com/openai/v1', model: 'openai/gpt-oss-120b', city: 'Porto',
   autoListen: true, ttsProvider: 'online', voiceURI: '', rate: 1.05,
-  openaiKey: '', openaiVoice: 'onyx', elevenKey: '', elevenVoice: ''
+  openaiKey: '', openaiVoice: 'onyx', elevenKey: '', elevenVoice: '', azureKey: '', azureRegion: 'westeurope'
 };
 let S = load();
 /* Migração: definições antigas da xAI ou chave do Groq com endereço errado */
@@ -385,12 +394,14 @@ async function speak(text, opts){
   setState('speaking');
   try{
     if (S.ttsProvider === 'online') return await speakOnline(text, opts);
+    if (S.ttsProvider === 'azure' && S.azureKey) return await speakRemote(azureTTS(text));
     if (S.ttsProvider === 'openai' && S.openaiKey) return await speakRemote(openaiTTS(text));
     if (S.ttsProvider === 'elevenlabs' && S.elevenKey && S.elevenVoice) return await speakRemote(elevenTTS(text));
   }catch(e){
     if (e.name === 'AbortError' || state === 'idle') return;
     console.warn('TTS remoto falhou, a usar voz do dispositivo', e);
-    addMsg('sys', 'A voz online falhou (' + (e.message||e) + '). A usar a voz do dispositivo.');
+    addMsg('sys', 'A voz escolhida falhou (' + (e.message||e) + '). A usar a voz online feminina.');
+    return speakOnline(text, opts);
   }
   return speakBrowser(text, opts);
 }
@@ -436,6 +447,21 @@ async function openaiTTS(text){
     body: JSON.stringify({model:'gpt-4o-mini-tts', voice:S.openaiVoice||'onyx', input:text, response_format:'mp3',
       instructions:'Fala em português europeu, com sotaque de Lisboa/Porto (Portugal), nunca com sotaque brasileiro. Tom calmo, elegante e ligeiramente espirituoso, como um mordomo britânico high-tech.'})});
   if (!r.ok) throw new Error('OpenAI ' + r.status);
+  return r.blob();
+}
+function xmlEsc(t){ return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+async function azureTTS(text){
+  abortCtl = new AbortController();
+  const region = ((S.azureRegion||'').trim() || 'westeurope').toLowerCase().replace(/\s+/g,'');
+  const pct = Math.round(((Number(S.rate)||1) - 1) * 100);
+  const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="pt-PT"><voice name="pt-PT-DuarteNeural"><prosody rate="${pct>=0?'+':''}${pct}%">${xmlEsc(text)}</prosody></voice></speak>`;
+  const r = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {method:'POST', signal:abortCtl.signal,
+    headers:{'Ocp-Apim-Subscription-Key':(S.azureKey||'').replace(/\s+/g,''),'Content-Type':'application/ssml+xml','X-Microsoft-OutputFormat':'audio-24khz-96kbitrate-mono-mp3'},
+    body: ssml});
+  if (!r.ok){
+    const why = {401:'chave inválida ou região errada', 403:'acesso recusado', 429:'limite grátis atingido'}[r.status] || '';
+    throw new Error('Microsoft ' + r.status + (why ? ' – ' + why : ''));
+  }
   return r.blob();
 }
 async function elevenTTS(text){
@@ -609,12 +635,13 @@ $('#composer').addEventListener('submit', e => {
 $('#clearBtn').addEventListener('click', () => { endAll(); history = []; log.innerHTML = ''; addMsg('sys','Nova conversa iniciada.'); });
 
 /* ================= Painel de definições ================= */
-const fields = ['apiKey','baseUrl','model','city','openaiKey','elevenKey','elevenVoice'];
+const fields = ['apiKey','baseUrl','model','city','openaiKey','elevenKey','elevenVoice','azureKey','azureRegion'];
 function syncPanel(){
   const p = $('#ttsProvider').value;
   $('#browserVoiceBox').classList.toggle('hidden', p !== 'browser');
   $('#openaiBox').classList.toggle('hidden', p !== 'openai');
   $('#elevenBox').classList.toggle('hidden', p !== 'elevenlabs');
+  $('#azureBox').classList.toggle('hidden', p !== 'azure');
   $('#rateVal').textContent = Number($('#rate').value).toFixed(2) + '×';
 }
 function openSettings(){
@@ -646,10 +673,11 @@ $('#saveSet').addEventListener('click', () => {
   addMsg('sys', 'Definições guardadas.');
 });
 $('#testVoice').addEventListener('click', async () => {
+  unlockAudio();
   const prev = {...S}; readPanel();
   if (synth && !voices.length) voices = synth.getVoices();
   const v = pickVoice();
-  if (S.ttsProvider === 'online') addMsg('sys', 'Teste de voz: a usar a voz online pt-PT.'); else addMsg('sys', synth ? `Teste de voz: ${voices.length} vozes no dispositivo; a usar ${v ? v.name + ' (' + v.lang + ')' : 'a voz padrão pt-PT'}.` : 'Este navegador não tem síntese de voz.');
+  if (S.ttsProvider === 'azure') addMsg('sys', 'Teste de voz: a usar o Duarte (Microsoft).'); else if (S.ttsProvider === 'online') addMsg('sys', 'Teste de voz: a usar a voz online pt-PT.'); else addMsg('sys', synth ? `Teste de voz: ${voices.length} vozes no dispositivo; a usar ${v ? v.name + ' (' + v.lang + ')' : 'a voz padrão pt-PT'}.` : 'Este navegador não tem síntese de voz.');
   const was = state; setState('speaking');
   await speak('Às suas ordens, senhor. Todos os sistemas estão operacionais.', {now:true, test:true, report:true});
   if (state === 'speaking') setState(was === 'speaking' ? 'idle' : was);
