@@ -440,10 +440,13 @@ async function openaiTTS(text){
 }
 async function elevenTTS(text){
   abortCtl = new AbortController();
-  const r = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(S.elevenVoice) + '?output_format=mp3_44100_128', {method:'POST', signal:abortCtl.signal,
-    headers:{'xi-api-key':S.elevenKey,'Content-Type':'application/json','Accept':'audio/mpeg'},
+  const r = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent((S.elevenVoice||'').trim()) + '?output_format=mp3_44100_128', {method:'POST', signal:abortCtl.signal,
+    headers:{'xi-api-key':(S.elevenKey||'').replace(/\s+/g,''),'Content-Type':'application/json','Accept':'audio/mpeg'},
     body: JSON.stringify({text, model_id:'eleven_multilingual_v2'})});
-  if (!r.ok) throw new Error('ElevenLabs ' + r.status);
+  if (!r.ok){
+    let why = ''; try{ const j = await r.json(); const d = j.detail || j; why = (d.status || d.code || '') + (d.message ? ': ' + d.message : ''); }catch(e){}
+    throw new Error('ElevenLabs ' + r.status + (why ? ' – ' + why : ''));
+  }
   return r.blob();
 }
 // Elemento de áudio único, desbloqueado no primeiro toque (exigência do iOS)
