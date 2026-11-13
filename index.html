@@ -341,7 +341,8 @@ async function ask(text){
 }
 
 function afterTurn(){
-  if (session && S.autoListen && SR) listen();
+  // Pequena pausa para o iPhone trocar o áudio de reprodução para microfone
+  if (session && S.autoListen && SR) setTimeout(() => { if (session && state !== 'thinking') listen(0); }, 500);
   else { session = false; setState('idle'); }
 }
 
@@ -506,7 +507,8 @@ function unlockAudio(){
 }
 
 /* ================= Voz (entrada) ================= */
-function listen(){
+function listen(tries){
+  tries = tries || 0;
   if (!SR){ setState('idle', 'Reconhecimento de voz indisponível — escreva abaixo'); session=false; return; }
   stopRec();
   finalText = ''; interimEl = null;
@@ -530,7 +532,7 @@ function listen(){
     }
     // O Safari às vezes não termina sozinho: força o fim após silêncio
     clearTimeout(silenceTimer);
-    silenceTimer = setTimeout(() => { try{ rec && rec.stop(); }catch(e){} }, 1600);
+    silenceTimer = setTimeout(() => { try{ rec && rec.stop(); }catch(e){} }, 2500);
   };
   rec.onerror = ev => {
     clearTimeout(silenceTimer);
@@ -549,8 +551,12 @@ function listen(){
     const heard = (finalText || (interimEl ? interimEl.textContent : '')).trim();
     if (interimEl){ interimEl.parentNode.classList.remove('interim'); }
     if (heard){ if (interimEl) interimEl.textContent = heard; else addMsg('user', heard); ask(heard); }
-    else if (session && S.autoListen && state === 'listening' && !r._noRetry){
-      // Silêncio: termina a sessão para não ficar a ouvir para sempre
+    else if (session && state === 'listening' && tries < 2){
+      // O Safari às vezes desliga o microfone cedo demais: volta a ouvir mais duas vezes
+      setTimeout(() => { if (session && state === 'listening') listen(tries + 1); }, 150);
+    }
+    else if (session && state === 'listening'){
+      // Silêncio prolongado: termina a sessão para não ficar a ouvir para sempre
       session = false; setState('idle', 'Não ouvi nada. Toque para falar.');
     } else if (state === 'listening'){ session = false; setState('idle'); }
   };
