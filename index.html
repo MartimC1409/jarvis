@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Jarvis</title>
+<meta name="theme-color" content="#02060d">
+<meta name="description" content="Jarvis — assistente pessoal por voz em português de Portugal">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Jarvis">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root{
+  --bg:#02060d; --cyan:#00d8ff; --cyan2:#5ff0ff; --blue:#0a7cff; --amber:#ffb000;
+  --txt:#cdefff; --dim:#5f8aa3; --panel:rgba(6,22,36,.92);
+  --glow:0 0 12px rgba(0,216,255,.8),0 0 40px rgba(0,216,255,.35);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;overflow:hidden}
+body{
+  background:
+    radial-gradient(circle at 50% 42%,rgba(0,140,255,.18),transparent 55%),
+    repeating-linear-gradient(0deg,rgba(0,216,255,.035) 0 1px,transparent 1px 40px),
+    repeating-linear-gradient(90deg,rgba(0,216,255,.035) 0 1px,transparent 1px 40px),
+    var(--bg);
+}
+#app{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+  padding:calc(env(safe-area-inset-top) + 10px) 16px calc(env(safe-area-inset-bottom) + 10px)}
+header{width:100%;max-width:720px;display:flex;align-items:center;justify-content:space-between}
+.brand{font-family:"Orbitron","Eurostile","Arial Narrow",sans-serif;letter-spacing:.45em;font-weight:700;
+  color:var(--cyan);text-shadow:var(--glow);font-size:18px}
+.brand small{display:block;letter-spacing:.2em;font-size:10px;color:var(--dim);font-weight:400;text-shadow:none;margin-top:2px}
+.iconbtn{background:none;border:1px solid rgba(0,216,255,.35);color:var(--cyan);width:42px;height:42px;border-radius:50%;
+  display:grid;place-items:center;cursor:pointer;box-shadow:inset 0 0 10px rgba(0,216,255,.15)}
+.iconbtn svg{width:22px;height:22px}
+#hud{flex:1;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0}
+#status{font-size:13px;letter-spacing:.25em;text-transform:uppercase;color:var(--cyan2);text-shadow:var(--glow);
+  margin:6px 0 14px;min-height:18px;text-align:center}
+/* ---------- Reator ---------- */
+#reactorWrap{position:relative;width:min(68vw,300px);height:min(68vw,300px);flex-shrink:0}
+#reactor{position:absolute;inset:0;border-radius:50%;border:none;padding:0;background:none;cursor:pointer;outline:none}
+.ring{position:absolute;border-radius:50%;pointer-events:none}
+.r1{inset:0;border:2px solid rgba(0,216,255,.35);box-shadow:var(--glow)}
+.r2{inset:7%;border:3px dashed rgba(0,216,255,.55);animation:spin 26s linear infinite}
+.r3{inset:15%;border:8px solid transparent;border-top-color:var(--cyan);border-bottom-color:var(--cyan);
+  filter:drop-shadow(0 0 8px var(--cyan));animation:spin 9s linear infinite reverse}
+.r4{inset:24%;border:2px solid rgba(95,240,255,.6);box-shadow:inset 0 0 25px rgba(0,216,255,.45),0 0 25px rgba(0,216,255,.4)}
+.r5{inset:30%;background:repeating-conic-gradient(from 0deg,rgba(0,216,255,.85) 0 14deg,transparent 14deg 36deg);
+  -webkit-mask:radial-gradient(circle,transparent 58%,#000 60%);mask:radial-gradient(circle,transparent 58%,#000 60%);
+  animation:spin 14s linear infinite}
+.core{position:absolute;inset:39%;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,#fff 0%,#c8f8ff 25%,var(--cyan) 55%,rgba(0,120,255,.2) 75%,transparent 78%);
+  box-shadow:0 0 30px var(--cyan),0 0 80px rgba(0,216,255,.6);animation:breathe 4s ease-in-out infinite}
+.wave{position:absolute;inset:24%;border-radius:50%;border:2px solid var(--cyan);opacity:0;pointer-events:none}
+#reactorLabel{position:absolute;left:0;right:0;bottom:-30px;text-align:center;font-size:11px;letter-spacing:.3em;color:var(--dim)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes breathe{0%,100%{transform:scale(.94);opacity:.85}50%{transform:scale(1.03);opacity:1}}
+@keyframes ripple{0%{transform:scale(1);opacity:.9}100%{transform:scale(2.05);opacity:0}}
+@keyframes thinkspin{to{transform:rotate(360deg)}}
+@keyframes talk{0%,100%{transform:scale(.9)}20%{transform:scale(1.12)}40%{transform:scale(.97)}60%{transform:scale(1.18)}80%{transform:scale(1)}}
+/* A ouvir: ondas que pulsam */
+.listening .wave{animation:ripple 1.8s ease-out infinite}
+.listening .wave.w2{animation-delay:.6s}.listening .wave.w3{animation-delay:1.2s}
+.listening .core{animation:breathe 1.1s ease-in-out infinite}
+.listening .r1{border-color:var(--cyan);box-shadow:0 0 20px var(--cyan),0 0 70px rgba(0,216,255,.6)}
+/* A pensar: anéis rápidos em âmbar */
+.thinking .r3{animation:thinkspin 1.1s linear infinite;border-top-color:var(--amber);border-bottom-color:transparent;filter:drop-shadow(0 0 10px var(--amber))}
+.thinking .r2{animation:spin 3s linear infinite;border-color:rgba(255,176,0,.6)}
+.thinking .r5{animation:spin 1.6s linear infinite reverse}
+.thinking .core{background:radial-gradient(circle,#fff 0%,#ffe6a8 30%,var(--amber) 58%,transparent 78%);box-shadow:0 0 30px var(--amber),0 0 70px rgba(255,176,0,.5);animation:breathe .8s ease-in-out infinite}
+/* A falar: núcleo vibra com a voz */
+.speaking .core{animation:talk .55s ease-in-out infinite;box-shadow:0 0 45px var(--cyan2),0 0 120px rgba(0,216,255,.8)}
+.speaking .r4{box-shadow:inset 0 0 45px rgba(0,216,255,.8),0 0 45px rgba(0,216,255,.7)}
+.speaking .r3{animation:spin 2.5s linear infinite reverse}
+/* ---------- Transcrição ---------- */
+#log{width:100%;max-width:720px;margin-top:44px;flex:0 1 auto;max-height:34vh;overflow-y:auto;padding:4px 4px 8px;
+  -webkit-mask:linear-gradient(transparent,#000 18px);mask:linear-gradient(transparent,#000 18px);scroll-behavior:smooth}
+.msg{margin:8px 0;padding:10px 13px;border-radius:12px;line-height:1.4;font-size:15px;white-space:pre-wrap;word-wrap:break-word}
+.msg .who{display:block;font-size:10px;letter-spacing:.25em;text-transform:uppercase;margin-bottom:3px;opacity:.7}
+.user{background:rgba(10,124,255,.12);border:1px solid rgba(10,124,255,.35);margin-left:14%}
+.bot{background:rgba(0,216,255,.07);border:1px solid rgba(0,216,255,.3);margin-right:14%;color:#e6fbff}
+.sys{color:var(--amber);font-size:13px;text-align:center;border:1px dashed rgba(255,176,0,.4);background:rgba(255,176,0,.06)}
+.interim{opacity:.6;font-style:italic}
+#composer{width:100%;max-width:720px;display:flex;gap:8px;margin-top:8px}
+#textIn{flex:1;background:rgba(0,30,50,.6);border:1px solid rgba(0,216,255,.35);color:var(--txt);border-radius:22px;
+  padding:11px 16px;font-size:16px;outline:none}
+#textIn:focus{border-color:var(--cyan);box-shadow:0 0 10px rgba(0,216,255,.35)}
+#sendBtn{background:rgba(0,216,255,.15);border:1px solid var(--cyan);color:var(--cyan);border-radius:22px;padding:0 16px;font-size:15px;cursor:pointer}
+/* ---------- Definições ---------- */
+#settings{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;z-index:10}
+#settings.open{display:flex}
+.sheet{width:100%;max-width:560px;max-height:92vh;overflow-y:auto;background:var(--panel);border:1px solid rgba(0,216,255,.35);
+  border-radius:18px 18px 0 0;padding:18px 18px calc(env(safe-area-inset-bottom) + 18px);box-shadow:0 -10px 50px rgba(0,216,255,.15)}
+@media(min-width:700px){#settings{align-items:center}.sheet{border-radius:18px}}
+.sheet h2{margin:0 0 4px;color:var(--cyan);letter-spacing:.2em;font-size:16px;text-transform:uppercase}
+.sheet h3{margin:18px 0 6px;color:var(--cyan2);font-size:13px;letter-spacing:.15em;text-transform:uppercase}
+.sheet label{display:block;font-size:13px;color:var(--dim);margin:10px 0 4px}
+.sheet input[type=text],.sheet input[type=password],.sheet input[type=url],.sheet select{width:100%;background:#031421;border:1px solid rgba(0,216,255,.3);
+  color:var(--txt);border-radius:9px;padding:10px;font-size:16px;outline:none}
+.sheet .row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;font-size:14px}
+.sheet .hint{font-size:12px;color:var(--dim);margin-top:4px;line-height:1.4}
+.sheet .hint a{color:var(--cyan)}
+.sheet .warn{color:var(--amber)}
+.sheet .btns{display:flex;gap:10px;margin-top:18px}
+.sheet button{flex:1;padding:12px;border-radius:10px;font-size:15px;cursor:pointer;border:1px solid var(--cyan);background:rgba(0,216,255,.15);color:var(--cyan)}
+.sheet button.sec{border-color:rgba(255,255,255,.2);background:none;color:var(--dim)}
+input[type=range]{width:100%}
+input[type=checkbox]{width:22px;height:22px;accent-color:var(--cyan)}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">J.A.R.V.I.S.<small>ASSISTENTE PESSOAL · PORTO</small></div>
+    <div style="display:flex;gap:8px">
+      <button class="iconbtn" id="clearBtn" title="Nova conversa" aria-label="Nova conversa">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+      </button>
+      <button class="iconbtn" id="gearBtn" title="Definições" aria-label="Definições">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="hud">
+    <div id="status">Toque no reator para falar</div>
+    <div id="reactorWrap" class="idle">
+      <div class="wave w1"></div><div class="wave w2"></div><div class="wave w3"></div>
+      <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
+      <div class="ring r4"></div><div class="ring r5"></div><div class="core"></div>
+      <button id="reactor" aria-label="Iniciar ou terminar conversa"></button>
+      <div id="reactorLabel">TOCAR PARA INICIAR</div>
+    </div>
+    <div id="log" aria-live="polite"></div>
+  </main>
+
+  <form id="composer" autocomplete="off">
+    <input id="textIn" type="text" placeholder="Ou escreva aqui a sua pergunta…" enterkeyhint="send">
+    <button id="sendBtn" type="submit">Enviar</button>
+  </form>
+</div>
+
+<div id="settings" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+  <div class="sheet">
+    <h2 id="setTitle">Definições</h2>
+    <div class="hint">Tudo fica guardado apenas neste dispositivo (localStorage). Nada é enviado para outro lado, exceto para os serviços que configurar.</div>
+
+    <h3>Cérebro (IA)</h3>
+    <label for="apiKey">Chave da API</label>
+    <input id="apiKey" type="password" placeholder="xai-…" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <div class="hint">Crie uma chave em <a href="https://console.x.ai" target="_blank" rel="noopener">console.x.ai</a> (xAI / Grok). Também funciona com qualquer API compatível com OpenAI.</div>
+    <label for="baseUrl">URL base</label>
+    <input id="baseUrl" type="url" autocapitalize="off" spellcheck="false">
+    <label for="model">Modelo</label>
+    <input id="model" type="text" autocapitalize="off" spellcheck="false">
+    <div class="hint">Recomendado para voz (rápido): <b>grok-4.20-0309-non-reasoning</b>. Mais inteligente, mas mais lento: <b>grok-4.7</b>.</div>
+    <label for="city">Cidade para a meteorologia</label>
+    <input id="city" type="text" placeholder="Porto">
+
+    <h3>Conversa</h3>
+    <div class="row"><span>Voltar a ouvir depois de responder</span><input id="autoListen" type="checkbox"></div>
+    <div class="hint">Com isto ligado, a conversa continua até tocar outra vez no reator.</div>
+
+    <h3>Voz</h3>
+    <label for="ttsProvider">Motor de voz</label>
+    <select id="ttsProvider">
+      <option value="browser">Voz do dispositivo (grátis)</option>
+      <option value="openai">OpenAI TTS (mais natural)</option>
+      <option value="elevenlabs">ElevenLabs (mais natural)</option>
+    </select>
+
+    <div id="browserVoiceBox">
+      <label for="voiceSel">Voz do dispositivo</label>
+      <select id="voiceSel"></select>
+      <div class="hint" id="voiceHint"></div>
+      <label for="rate">Velocidade: <span id="rateVal"></span></label>
+      <input id="rate" type="range" min="0.7" max="1.4" step="0.05">
+    </div>
+
+    <div id="openaiBox">
+      <label for="openaiKey">Chave da OpenAI</label>
+      <input id="openaiKey" type="password" placeholder="sk-…" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <div class="hint">Em <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com/api-keys</a>. Usa o modelo gpt-4o-mini-tts com instruções para sotaque de Portugal.</div>
+      <label for="openaiVoice">Voz OpenAI</label>
+      <select id="openaiVoice">
+        <option>onyx</option><option>ash</option><option>echo</option><option>fable</option><option>alloy</option>
+        <option>ballad</option><option>coral</option><option>sage</option><option>shimmer</option><option>nova</option><option>verse</option>
+      </select>
+    </div>
+
+    <div id="elevenBox">
+      <label for="elevenKey">Chave da ElevenLabs</label>
+      <input id="elevenKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <div class="hint">Em <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" rel="noopener">elevenlabs.io</a> → API Keys.</div>
+      <label for="elevenVoice">ID da voz</label>
+      <input id="elevenVoice" type="text" autocapitalize="off" spellcheck="false">
+      <div class="hint">Na Voice Library da ElevenLabs, procure uma voz com sotaque de Portugal e cole aqui o "Voice ID".</div>
+    </div>
+
+    <div class="btns">
+      <button class="sec" type="button" id="testVoice">Testar voz</button>
+      <button type="button" id="saveSet">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+
+/* ================= Definições ================= */
+const DEFAULTS = {
+  apiKey: '', baseUrl: 'https://api.x.ai/v1', model: 'grok-4.20-0309-non-reasoning', city: 'Porto',
+  autoListen: true, ttsProvider: 'browser', voiceURI: '', rate: 1.05,
+  openaiKey: '', openaiVoice: 'onyx', elevenKey: '', elevenVoice: ''
+};
+let S = load();
+function load(){ try{ return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('jarvis.settings')||'{}')); }catch(e){ return {...DEFAULTS}; } }
+function save(){ localStorage.setItem('jarvis.settings', JSON.stringify(S)); }
+
+/* ================= Elementos ================= */
+const wrap = $('#reactorWrap'), statusEl = $('#status'), label = $('#reactorLabel'), log = $('#log');
+
+/* ================= Estado ================= */
+let state = 'idle';           // idle | listening | thinking | speaking
+let session = false;          // conversa ativa (entre toques)
+let history = [];             // histórico da sessão
+let rec = null, interimEl = null, finalText = '', silenceTimer = null, abortCtl = null, currentAudio = null;
+let weatherInfo = '';
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const synth = window.speechSynthesis;
+
+function setState(s, text){
+  state = s;
+  wrap.className = s;
+  const labels = {idle:'TOCAR PARA INICIAR', listening:'TOCAR PARA TERMINAR', thinking:'A PROCESSAR', speaking:'TOCAR PARA TERMINAR'};
+  const st = {idle:'Toque no reator para falar', listening:'A ouvir…', thinking:'A pensar…', speaking:'Jarvis a falar…'};
+  label.textContent = labels[s];
+  statusEl.textContent = text || st[s];
+}
+
+function addMsg(kind, text){
+  const d = document.createElement('div');
+  d.className = 'msg ' + kind;
+  if (kind !== 'sys'){ const w = document.createElement('span'); w.className='who'; w.textContent = kind==='user' ? 'Martim' : 'Jarvis'; d.appendChild(w); }
+  const t = document.createElement('span'); t.textContent = text; d.appendChild(t);
+  log.appendChild(d); log.scrollTop = log.scrollHeight;
+  return t;
+}
+
+/* ================= Meteorologia (Open-Meteo, sem chave) ================= */
+const WMO = {0:'céu limpo',1:'céu pouco nublado',2:'céu parcialmente nublado',3:'céu encoberto',45:'nevoeiro',48:'nevoeiro com geada',
+  51:'chuvisco fraco',53:'chuvisco',55:'chuvisco forte',56:'chuvisco gelado',57:'chuvisco gelado forte',61:'chuva fraca',63:'chuva',65:'chuva forte',
+  66:'chuva gelada',67:'chuva gelada forte',71:'neve fraca',73:'neve',75:'neve forte',77:'grãos de neve',80:'aguaceiros fracos',81:'aguaceiros',
+  82:'aguaceiros fortes',85:'aguaceiros de neve',86:'aguaceiros de neve fortes',95:'trovoada',96:'trovoada com granizo',99:'trovoada forte com granizo'};
+const tfetch = (u, ms=8000) => { const c = new AbortController(); const t = setTimeout(()=>c.abort(), ms); return fetch(u,{signal:c.signal}).finally(()=>clearTimeout(t)); };
+async function loadWeather(){
+  try{
+    const city = (S.city||'Porto').trim();
+    const g = await (await tfetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=pt&name='+encodeURIComponent(city))).json();
+    const p = g.results && g.results[0]; if(!p) return;
+    const u = `https://api.open-meteo.com/v1/forecast?latitude=${p.latitude}&longitude=${p.longitude}&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,precipitation&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=3&timezone=auto`;
+    const w = await (await tfetch(u)).json();
+    const c = w.current, d = w.daily, days = ['hoje','amanhã','depois de amanhã'];
+    let s = `Agora em ${p.name}: ${Math.round(c.temperature_2m)}°C (sensação ${Math.round(c.apparent_temperature)}°C), ${WMO[c.weather_code]||'—'}, vento ${Math.round(c.wind_speed_10m)} km/h.`;
+    d.time.forEach((t,i)=>{ s += ` ${days[i]} (${t}): ${WMO[d.weather_code[i]]||'—'}, mín ${Math.round(d.temperature_2m_min[i])}°C, máx ${Math.round(d.temperature_2m_max[i])}°C, probabilidade de precipitação ${d.precipitation_probability_max[i]}%.`; });
+    weatherInfo = s;
+  }catch(e){ console.warn('Meteorologia indisponível', e); }
+}
+
+/* ================= Cérebro ================= */
+function systemPrompt(){
+  const now = new Date();
+  const dt = now.toLocaleString('pt-PT',{weekday:'long',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Lisbon'});
+  return `És o Jarvis, o assistente pessoal do Martim, inspirado no J.A.R.V.I.S. do Homem de Ferro. O Martim é um estudante do Porto, no último ano do secundário, que gosta de speedcubing e programação.
+Regras:
+- Responde SEMPRE em português europeu (de Portugal): vocabulário, ortografia e construções de Portugal, nunca do Brasil. Usa por exemplo "telemóvel", "ecrã", "autocarro", "pequeno-almoço", "casa de banho", "estás a fazer" (e não "você está fazendo", "celular", "tela", "ônibus", "café da manhã").
+- As tuas respostas vão ser lidas em voz alta: sê curto e natural para ouvir (normalmente 1 a 3 frases), sem markdown, listas, emojis, tabelas ou URLs. Escreve números e unidades de forma fácil de dizer.
+- Sê espirituoso, educado e ligeiramente britânico no humor, como o Jarvis. Trata-o por "Martim" e, de vez em quando, por "senhor".
+- Se não souberes algo ou não tiveres dados em tempo real, di-lo com honestidade e não inventes.
+Data e hora atuais (Lisboa): ${dt}.` + (weatherInfo ? `\nMeteorologia atual (Open-Meteo): ${weatherInfo}` : '');
+}
+
+async function ask(text){
+  if (!S.apiKey){
+    const m = 'Martim, ainda não tenho cérebro ligado. Abra as definições, na roda dentada, e cole a sua chave da API da xAI.';
+    addMsg('sys', 'Falta a chave da API. Toque na roda dentada (⚙) e cole a sua chave da xAI, que pode criar em console.x.ai.');
+    session = false; await speak(m); setState('idle'); return;
+  }
+  history.push({role:'user', content:text});
+  setState('thinking');
+  abortCtl = new AbortController();
+  try{
+    const url = S.baseUrl.replace(/\/+$/,'') + '/chat/completions';
+    const r = await fetch(url, {
+      method:'POST', signal: abortCtl.signal,
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+S.apiKey},
+      body: JSON.stringify({model:S.model, messages:[{role:'system',content:systemPrompt()}, ...history.slice(-30)], max_tokens:500, temperature:0.7})
+    });
+    if (!r.ok){
+      let detail=''; try{ const j = await r.json(); detail = (j.error && (j.error.message||j.error)) || j.message || JSON.stringify(j); }catch(e){ detail = r.statusText; }
+      throw new Error(`Erro ${r.status}: ${detail}`);
+    }
+    const j = await r.json();
+    let reply = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content || '').trim();
+    if (!reply) reply = 'Peço desculpa, senhor, fiquei sem palavras. Pode repetir?';
+    history.push({role:'assistant', content:reply});
+    if (!session && state==='idle') return; // terminado pelo utilizador
+    addMsg('bot', reply);
+    await speak(reply);
+  }catch(e){
+    history.pop();
+    if (e.name === 'AbortError') return;
+    console.error(e);
+    let msg = String(e.message||e);
+    if (/401|403|invalid.*key|incorrect.*key/i.test(msg)) msg += ' — verifique a chave da API nas definições.';
+    else if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) msg = 'Sem ligação ao servidor da IA. Verifique a internet e o URL base nas definições.';
+    addMsg('sys', msg);
+    await speak('Peço desculpa, Martim, houve um problema de ligação.');
+  }
+  afterTurn();
+}
+
+function afterTurn(){
+  if (session && S.autoListen && SR) listen();
+  else { session = false; setState('idle'); }
+}
+
+/* ================= Voz (saída) ================= */
+let voices = [];
+function refreshVoices(){
+  if (!synth) return;
+  voices = synth.getVoices();
+  const sel = $('#voiceSel'); if (!sel) return;
+  const pt = voices.filter(v => /^pt/i.test(v.lang));
+  const ptPT = pt.filter(v => /^pt[-_]PT$/i.test(v.lang));
+  const list = ptPT.length ? ptPT : pt;
+  sel.innerHTML = '';
+  list.forEach(v => { const o=document.createElement('option'); o.value=v.voiceURI; o.textContent=`${v.name} (${v.lang})`; sel.appendChild(o); });
+  const best = pickVoice();
+  if (best) sel.value = best.voiceURI;
+  const hint = $('#voiceHint');
+  if (!synth) hint.textContent = 'Este navegador não suporta síntese de voz.';
+  else if (!voices.length) hint.textContent = 'A carregar vozes…';
+  else if (ptPT.length) hint.textContent = `${ptPT.length} voz(es) de português de Portugal encontrada(s).`;
+  else if (pt.length) { hint.innerHTML = '<span class="warn">Não há nenhuma voz pt-PT neste dispositivo; a usar português de outra região.</span> No iPhone: Definições → Acessibilidade → Conteúdo falado → Vozes → Português (Portugal) → descarregue a Joana ou a Catarina (melhorada).'; }
+  else hint.innerHTML = '<span class="warn">Não há vozes em português neste dispositivo.</span>';
+}
+function pickVoice(){
+  if (!voices.length) return null;
+  const byURI = S.voiceURI && voices.find(v => v.voiceURI === S.voiceURI);
+  if (byURI) return byURI;
+  const ptPT = voices.filter(v => /^pt[-_]PT$/i.test(v.lang));
+  const rank = v => (/(premium|enhanced|melhorad|natural|neural)/i.test(v.name)?4:0) + (/catarina/i.test(v.name)?3:0) + (/joana/i.test(v.name)?2:0) + (/google/i.test(v.name)?1:0);
+  if (ptPT.length) return ptPT.sort((a,b)=>rank(b)-rank(a))[0];
+  return voices.find(v => /^pt/i.test(v.lang)) || null;
+}
+if (synth){ refreshVoices(); synth.onvoiceschanged = refreshVoices; setTimeout(refreshVoices, 500); setTimeout(refreshVoices, 2000); }
+
+function cleanForSpeech(t){ return t.replace(/[*_#`>~]/g,'').replace(/https?:\/\/\S+/g,'').replace(/\s+/g,' ').trim(); }
+
+async function speak(text){
+  text = cleanForSpeech(text);
+  if (!text) return;
+  setState('speaking');
+  try{
+    if (S.ttsProvider === 'openai' && S.openaiKey) return await speakRemote(openaiTTS(text));
+    if (S.ttsProvider === 'elevenlabs' && S.elevenKey && S.elevenVoice) return await speakRemote(elevenTTS(text));
+  }catch(e){
+    if (e.name === 'AbortError' || state === 'idle') return;
+    console.warn('TTS remoto falhou, a usar voz do dispositivo', e);
+    addMsg('sys', 'A voz online falhou (' + (e.message||e) + '). A usar a voz do dispositivo.');
+  }
+  return speakBrowser(text);
+}
+
+function speakBrowser(text){
+  return new Promise(resolve => {
+    if (!synth){ resolve(); return; }
+    synth.cancel();
+    // Divide em frases: evita cortes do Chrome em textos longos
+    const parts = text.match(/[^.!?;:]+[.!?;:]*\s*/g) || [text];
+    const v = pickVoice();
+    let i = 0, done = false;
+    const finish = () => { if(!done){ done = true; clearInterval(keep); resolve(); } };
+    const keep = setInterval(() => { if (state !== 'speaking') { synth.cancel(); finish(); } }, 250);
+    const next = () => {
+      if (state !== 'speaking' || i >= parts.length) { finish(); return; }
+      const u = new SpeechSynthesisUtterance(parts[i++].trim());
+      u.lang = v ? v.lang : 'pt-PT'; if (v) u.voice = v;
+      u.rate = Number(S.rate)||1; u.pitch = 1;
+      u.onend = next; u.onerror = next;
+      synth.speak(u);
+    };
+    next();
+  });
+}
+
+async function openaiTTS(text){
+  abortCtl = new AbortController();
+  const r = await fetch('https://api.openai.com/v1/audio/speech', {method:'POST', signal:abortCtl.signal,
+    headers:{'Authorization':'Bearer '+S.openaiKey,'Content-Type':'application/json'},
+    body: JSON.stringify({model:'gpt-4o-mini-tts', voice:S.openaiVoice||'onyx', input:text, response_format:'mp3',
+      instructions:'Fala em português europeu, com sotaque de Lisboa/Porto (Portugal), nunca com sotaque brasileiro. Tom calmo, elegante e ligeiramente espirituoso, como um mordomo britânico high-tech.'})});
+  if (!r.ok) throw new Error('OpenAI ' + r.status);
+  return r.blob();
+}
+async function elevenTTS(text){
+  abortCtl = new AbortController();
+  const r = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(S.elevenVoice) + '?output_format=mp3_44100_128', {method:'POST', signal:abortCtl.signal,
+    headers:{'xi-api-key':S.elevenKey,'Content-Type':'application/json','Accept':'audio/mpeg'},
+    body: JSON.stringify({text, model_id:'eleven_multilingual_v2'})});
+  if (!r.ok) throw new Error('ElevenLabs ' + r.status);
+  return r.blob();
+}
+// Elemento de áudio único, desbloqueado no primeiro toque (exigência do iOS)
+const audioEl = new Audio(); audioEl.setAttribute('playsinline','');
+const SILENT = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAACAAACcQCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAnGMHkkIAAAAAAAAAAAAAAAAAAAA//sQZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
+async function speakRemote(blobP){
+  const blob = await blobP;
+  if (state !== 'speaking') return;
+  const url = URL.createObjectURL(blob);
+  return new Promise((resolve) => {
+    currentAudio = audioEl;
+    const end = () => { audioEl.onended = audioEl.onerror = audioEl.onpause = null; URL.revokeObjectURL(url); currentAudio = null; resolve(); };
+    audioEl.onended = end; audioEl.onerror = end; audioEl.onpause = end;
+    audioEl.src = url;
+    audioEl.play().catch(err => { console.warn(err); end(); });
+  });
+}
+let unlocked = false;
+function unlockAudio(){
+  if (unlocked) return; unlocked = true;
+  try{ audioEl.src = SILENT; const p = audioEl.play(); if (p) p.then(()=>audioEl.pause()).catch(()=>{}); }catch(e){}
+  try{ if (synth){ const u = new SpeechSynthesisUtterance(' '); u.volume = 0; synth.speak(u); } }catch(e){}
+}
+
+/* ================= Voz (entrada) ================= */
+function listen(){
+  if (!SR){ setState('idle', 'Reconhecimento de voz indisponível — escreva abaixo'); session=false; return; }
+  stopRec();
+  finalText = ''; interimEl = null;
+  rec = new SR();
+  rec.lang = 'pt-PT';
+  rec.interimResults = true;
+  rec.continuous = false;
+  rec.maxAlternatives = 1;
+  rec.onstart = () => setState('listening');
+  rec.onresult = ev => {
+    let interim = ''; finalText = '';
+    for (let i = 0; i < ev.results.length; i++){
+      const r = ev.results[i];
+      if (r.isFinal) finalText += r[0].transcript; else interim += r[0].transcript;
+    }
+    const shown = (finalText + ' ' + interim).trim();
+    if (shown){
+      if (!interimEl){ interimEl = addMsg('user', shown); interimEl.parentNode.classList.add('interim'); }
+      else interimEl.textContent = shown;
+      log.scrollTop = log.scrollHeight;
+    }
+    // O Safari às vezes não termina sozinho: força o fim após silêncio
+    clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(() => { try{ rec && rec.stop(); }catch(e){} }, 1600);
+  };
+  rec.onerror = ev => {
+    clearTimeout(silenceTimer);
+    const e = ev.error;
+    if (e === 'no-speech' || e === 'aborted') return;
+    const msgs = {'not-allowed':'O acesso ao microfone foi recusado. Autorize o microfone nas definições do navegador.',
+      'service-not-allowed':'O reconhecimento de voz não está disponível aqui. No iPhone, confirme que o Ditado está ativo (Definições → Geral → Teclado → Ativar Ditado).',
+      'network':'Erro de rede no reconhecimento de voz.','audio-capture':'Não foi encontrado nenhum microfone.','language-not-supported':'Este navegador não reconhece português de Portugal.'};
+    addMsg('sys', msgs[e] || ('Erro no reconhecimento de voz: ' + e));
+    session = false;
+  };
+  rec.onend = () => {
+    clearTimeout(silenceTimer);
+    const r = rec; rec = null;
+    if (!r || r._killed) return;
+    const heard = (finalText || (interimEl ? interimEl.textContent : '')).trim();
+    if (interimEl){ interimEl.parentNode.classList.remove('interim'); }
+    if (heard){ if (interimEl) interimEl.textContent = heard; else addMsg('user', heard); ask(heard); }
+    else if (session && S.autoListen && state === 'listening' && !r._noRetry){
+      // Silêncio: termina a sessão para não ficar a ouvir para sempre
+      session = false; setState('idle', 'Não ouvi nada. Toque para falar.');
+    } else if (state === 'listening'){ session = false; setState('idle'); }
+  };
+  try{ rec.start(); setState('listening'); }
+  catch(e){ console.warn(e); setState('idle'); session = false; }
+}
+function stopRec(){
+  clearTimeout(silenceTimer);
+  if (rec){ rec._killed = true; try{ rec.abort(); }catch(e){} rec = null; }
+}
+
+/* ================= Controlo ================= */
+function endAll(){
+  session = false;
+  stopRec();
+  if (abortCtl) { try{ abortCtl.abort(); }catch(e){} }
+  if (synth) synth.cancel();
+  if (currentAudio){ try{ currentAudio.pause(); }catch(e){} }
+  if (interimEl && interimEl.parentNode.classList.contains('interim')) interimEl.parentNode.remove();
+  interimEl = null;
+  setState('idle');
+}
+
+$('#reactor').addEventListener('click', () => {
+  unlockAudio();
+  if (state !== 'idle' || session){ endAll(); return; }
+  if (!SR){
+    addMsg('sys', 'Este navegador não suporta reconhecimento de voz. Use o Safari no iPhone ou o Chrome no computador/Android — ou escreva a pergunta na caixa abaixo.');
+    $('#textIn').focus(); return;
+  }
+  session = true;
+  if (!history.length && !weatherInfo) loadWeather();
+  listen();
+});
+
+$('#composer').addEventListener('submit', e => {
+  e.preventDefault();
+  unlockAudio();
+  const t = $('#textIn').value.trim(); if (!t) return;
+  $('#textIn').value = '';
+  endAll();
+  addMsg('user', t);
+  session = false; // por escrito: não volta a ouvir automaticamente
+  ask(t);
+});
+
+$('#clearBtn').addEventListener('click', () => { endAll(); history = []; log.innerHTML = ''; addMsg('sys','Nova conversa iniciada.'); });
+
+/* ================= Painel de definições ================= */
+const fields = ['apiKey','baseUrl','model','city','openaiKey','elevenKey','elevenVoice'];
+function syncPanel(){
+  const p = $('#ttsProvider').value;
+  $('#browserVoiceBox').classList.toggle('hidden', p !== 'browser');
+  $('#openaiBox').classList.toggle('hidden', p !== 'openai');
+  $('#elevenBox').classList.toggle('hidden', p !== 'elevenlabs');
+  $('#rateVal').textContent = Number($('#rate').value).toFixed(2) + '×';
+}
+function openSettings(){
+  fields.forEach(f => $('#'+f).value = S[f] || '');
+  $('#autoListen').checked = !!S.autoListen;
+  $('#ttsProvider').value = S.ttsProvider;
+  $('#openaiVoice').value = S.openaiVoice;
+  $('#rate').value = S.rate;
+  refreshVoices(); syncPanel();
+  $('#settings').classList.add('open');
+}
+function readPanel(){
+  fields.forEach(f => S[f] = $('#'+f).value.trim());
+  if (!S.baseUrl) S.baseUrl = DEFAULTS.baseUrl;
+  if (!S.model) S.model = DEFAULTS.model;
+  S.autoListen = $('#autoListen').checked;
+  S.ttsProvider = $('#ttsProvider').value;
+  S.openaiVoice = $('#openaiVoice').value;
+  S.rate = Number($('#rate').value);
+  if ($('#voiceSel').value) S.voiceURI = $('#voiceSel').value;
+}
+$('#gearBtn').addEventListener('click', openSettings);
+$('#ttsProvider').addEventListener('change', syncPanel);
+$('#rate').addEventListener('input', syncPanel);
+$('#saveSet').addEventListener('click', () => {
+  const oldCity = S.city; readPanel(); save();
+  if (S.city !== oldCity) { weatherInfo = ''; loadWeather(); }
+  $('#settings').classList.remove('open');
+  addMsg('sys', 'Definições guardadas.');
+});
+$('#testVoice').addEventListener('click', async () => {
+  unlockAudio(); const prev = {...S}; readPanel();
+  await speak('Às suas ordens, Martim. Todos os sistemas estão operacionais.');
+  if (state === 'speaking') setState('idle');
+  S = Object.assign(prev, {}); // só guarda ao carregar em Guardar
+});
+$('#settings').addEventListener('click', e => { if (e.target.id === 'settings') $('#settings').classList.remove('open'); });
+
+/* ================= Arranque ================= */
+setState('idle');
+if (!SR){
+  addMsg('sys', 'Este navegador não suporta reconhecimento de voz. Pode escrever as perguntas na caixa abaixo — o Jarvis responde em voz. (Use o Safari no iPhone ou o Chrome para falar.)');
+}
+if (!S.apiKey){
+  addMsg('sys', 'Bem-vindo, Martim. Para começar, toque na roda dentada (⚙) e cole a sua chave da API da xAI (console.x.ai).');
+}
+loadWeather();
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW', e));
+}
+window.__jarvis = { get state(){ return state; }, get weather(){ return weatherInfo; }, ask, speak, settings: () => S };
+})();
+</script>
+</body>
+</html>
