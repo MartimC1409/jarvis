@@ -311,7 +311,7 @@ async function ask(text){
     const r = await fetch(url, {
       method:'POST', signal: abortCtl.signal,
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+S.apiKey},
-      body: JSON.stringify({model:S.model, messages:[{role:'system',content:systemPrompt()}, ...history.slice(-30)], max_tokens:500, temperature:0.7})
+      body: JSON.stringify(Object.assign({model:S.model, messages:[{role:'system',content:systemPrompt()}, ...history.slice(-30)], max_tokens:2000, temperature:0.7}, /gpt-oss/i.test(S.model) ? {reasoning_effort:'low'} : {}))
     });
     if (!r.ok){
       let detail=''; try{ const j = await r.json(); detail = (j.error && (j.error.message||j.error)) || j.message || JSON.stringify(j); }catch(e){ detail = r.statusText; }
@@ -393,7 +393,8 @@ async function speak(text){
 function speakBrowser(text){
   return new Promise(resolve => {
     if (!synth){ resolve(); return; }
-    synth.cancel();
+    if (synth.speaking || synth.pending) synth.cancel();
+    try{ synth.resume(); }catch(e){}
     // Divide em frases: evita cortes do Chrome em textos longos
     const parts = text.match(/[^.!?;:]+[.!?;:]*\s*/g) || [text];
     const v = pickVoice();
@@ -405,10 +406,15 @@ function speakBrowser(text){
       const u = new SpeechSynthesisUtterance(parts[i++].trim());
       u.lang = v ? v.lang : 'pt-PT'; if (v) u.voice = v;
       u.rate = Number(S.rate)||1; u.pitch = 1;
-      u.onend = next; u.onerror = next;
+      let fired = false;
+      const go = () => { if (fired) return; fired = true; clearTimeout(guard); next(); };
+      u.onend = go; u.onerror = go;
+      // Proteção: no iOS o onend às vezes não chega
+      const guard = setTimeout(go, Math.max(4000, u.text.length * 120 / (u.rate||1)));
       synth.speak(u);
     };
-    next();
+    // iOS precisa de um momento para libertar o microfone antes de falar
+    setTimeout(next, 350);
   });
 }
 
@@ -446,9 +452,9 @@ async function speakRemote(blobP){
 }
 let unlocked = false;
 function unlockAudio(){
-  if (unlocked) return; unlocked = true;
-  try{ audioEl.src = SILENT; const p = audioEl.play(); if (p) p.then(()=>audioEl.pause()).catch(()=>{}); }catch(e){}
-  try{ if (synth){ const u = new SpeechSynthesisUtterance(' '); u.volume = 0; synth.speak(u); } }catch(e){}
+  // Desbloqueia a voz em cada toque (o iOS só deixa falar depois de um gesto)
+  if (!unlocked){ unlocked = true; try{ audioEl.src = SILENT; const p = audioEl.play(); if (p) p.then(()=>audioEl.pause()).catch(()=>{}); }catch(e){} }
+  try{ if (synth){ synth.resume(); const u = new SpeechSynthesisUtterance('.'); u.volume = 0.01; u.rate = 2; u.lang = 'pt-PT'; synth.speak(u); } }catch(e){}
 }
 
 /* ================= Voz (entrada) ================= */
